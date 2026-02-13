@@ -132,20 +132,17 @@ function parseSchedule(str){
   const dayChars=['월','화','수','목','금','토','일'];
   const result=[];
   str.split('/').map(s=>s.trim()).forEach(p=>{
-    // 신규 형식: "반이름 요일들 시간"
-    const mNew=p.match(/^(.+?)\s+([가-힣,\s]+)\s+(\d{1,2}:\d{2})$/);
-    if(mNew){
-      const possibleClass=mNew[1].trim();
-      const days=mNew[2].split(',').map(d=>d.trim());
-      const allDays=days.every(d=>dayChars.includes(d));
-      if(!allDays){
-        days.forEach(d=>{if(dm[d]!==undefined)result.push({day:d,dayNum:dm[d],time:mNew[3],className:possibleClass});});
-        return;
-      }
-    }
-    // 기존 형식: "요일들 시간"
-    const m=p.match(/^([가-힣,\s]+)\s+(\d{1,2}:\d{2})$/);
-    if(m){m[1].split(',').map(d=>d.trim()).forEach(d=>{if(dm[d]!==undefined)result.push({day:d,dayNum:dm[d],time:m[2]})});}
+    if(!p)return;
+    const timeMatch=p.match(/(\d{1,2}:\d{2})$/);
+    if(!timeMatch)return;
+    const time=timeMatch[1];
+    const beforeTime=p.substring(0,p.length-time.length).trim();
+    const dayMatch=beforeTime.match(/((?:[월화수목금토일](?:\s*,\s*)?)+)$/);
+    if(!dayMatch)return;
+    const dayStr=dayMatch[1];
+    const days=dayStr.split(',').map(d=>d.trim()).filter(d=>dayChars.includes(d));
+    const beforeDays=beforeTime.substring(0,beforeTime.length-dayStr.length).trim();
+    days.forEach(d=>{if(dm[d]!==undefined)result.push({day:d,dayNum:dm[d],time:time,className:beforeDays||null});});
   });
   return result;
 }
