@@ -190,7 +190,8 @@ function renderLogin(){
 }
 
 function renderMain(){
-  const s=S.student,rem=s.remainingMakeup;
+  const s=S.student,rem=s.remainingMakeup,ua=s.unusedAbsence||0;
+  const canBook=rem>0&&ua>0;
   const calHtml=renderCalendar();
   let histHtml='';
   const absItems=S.absences.filter(a=>a.status==='확정').map(a=>`<div class="booking-item"><span style="font-size:13px;font-weight:500">${shortDate(a.absenceDate)} · ${S.student.class} · ${a.time}</span><span class="tag t-full">결석</span></div>`).join('');
@@ -209,15 +210,15 @@ function renderMain(){
     </div>
     <div class="ig">
       <div class="mb ${rem>0?'ok':'no'}" style="margin:0"><div><span style="font-size:13px">보강 잔여</span></div><div style="display:flex;align-items:baseline;gap:4px"><span class="mc ${rem>0?'g':'r'}">${rem}</span><span style="font-size:13px;color:var(--muted)">/${s.maxMakeup}회</span></div></div>
-      <div class="mb ok" style="margin:0;background:#FFF3E0;border-color:#FFE0B2"><div><span style="font-size:13px">결석 신고</span></div><div><span class="mc" style="color:var(--orange)">${s.absenceCount}</span><span style="font-size:13px;color:var(--muted)">회</span></div></div>
+      <div class="mb ok" style="margin:0;background:#FFF3E0;border-color:#FFE0B2"><div><span style="font-size:13px">미사용 결석</span></div><div><span class="mc" style="color:var(--orange)">${ua}</span><span style="font-size:13px;color:var(--muted)">/${s.absenceCount}회</span></div></div>
     </div>
   </div>
   <div class="tabs">
     <button class="tab ${S.mode==='absence'?'active':''}" data-mode="absence">📅 결석 신고</button>
     <button class="tab ${S.mode==='makeup'?'active':''}" data-mode="makeup">✏️ 보강 신청</button>
   </div>
-  ${S.mode==='makeup'&&s.absenceCount===0?'<div class="abs-warn"><p>⚠️ 결석 신고를 먼저 해주세요.<br>결석 신고 후 보강 신청이 가능합니다.</p></div>':''}
-  ${S.mode==='makeup'&&s.absenceCount>0&&rem<=0?'<div class="abs-warn"><p>⚠️ 보강 가능 횟수를 모두 사용했습니다.<br>추가 보강을 원하시면 결석 신고를 먼저 해주세요.</p></div>':''}
+  ${S.mode==='makeup'&&ua<=0?'<div class="abs-warn"><p>⚠️ 결석 신고를 먼저 해주세요.<br>결석 신고 후 보강 신청이 가능합니다.</p></div>':''}
+  ${S.mode==='makeup'&&ua>0&&rem<=0?'<div class="abs-warn"><p>⚠️ 보강 가능 횟수를 모두 사용했습니다.</p></div>':''}
   ${calHtml}${histHtml}
   <button class="btn-s" id="btnLogout" style="width:100%">로그아웃</button></div>`;
 }
@@ -248,7 +249,7 @@ function renderCalendar(){
     else{if(hasMkp)cls+=' has-makeup';else if(hasAvail&&!isPast&&inR)cls+=' has-class';}
     let ok=false;
     if(S.mode==='absence'&&hasClass&&!isPast&&inR&&!hasAbs)ok=true;
-    if(S.mode==='makeup'&&hasAvail&&!isPast&&inR&&!hasMkp&&S.student.absenceCount>0&&S.student.remainingMakeup>0)ok=true;
+    if(S.mode==='makeup'&&hasAvail&&!isPast&&inR&&!hasMkp&&(S.student.unusedAbsence||0)>0&&S.student.remainingMakeup>0)ok=true;
     let dots='';
     if(hasAbs)dots+='<div class="cal-dot abs"></div>';
     if(hasMkp)dots+='<div class="cal-dot mkp"></div>';
@@ -378,7 +379,7 @@ async function doReportAbsence(){
   for(const c of cls){
     const r=await api({action:'reportAbsence',studentId:S.student.id,absenceDate:S.selectedDate,absenceDay:dayName,absenceTime:c.time});
     if(!r.success&&!r.error.includes('이미')){S.error=r.error;ok=false;break;}
-    if(r.success&&r.absence){S.absences.push(r.absence);S.student.absenceCount++;S.student.remainingMakeup=Math.max(0,Math.min(S.student.absenceCount,S.student.maxMakeup)-S.student.usedMakeup);}
+    if(r.success&&r.absence){S.absences.push(r.absence);S.student.absenceCount++;S.student.unusedAbsence=Math.max(0,S.student.absenceCount-S.student.usedMakeup);}
   }
   S.loading=false;
   if(ok)S.step='doneAbsence';
@@ -393,7 +394,8 @@ async function doBook(){
   if(!r.success){S.error=r.error;render();return;}
   // 로컬 캐시 업데이트
   S.student.usedMakeup++;
-  S.student.remainingMakeup=Math.max(0,Math.min(S.student.absenceCount,S.student.maxMakeup)-S.student.usedMakeup);
+  S.student.remainingMakeup=Math.max(0,S.student.maxMakeup-S.student.usedMakeup);
+  S.student.unusedAbsence=Math.max(0,S.student.absenceCount-S.student.usedMakeup);
   S.bookings.push(r.booking);
   if(r.updatedSchedule){
     const idx=S.allSchedules.findIndex(s=>s.id===r.updatedSchedule.id);
